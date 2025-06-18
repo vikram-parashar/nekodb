@@ -99,7 +99,7 @@ func (s *Server) readLoop(conn net.Conn) error {
 
 		cmd:= data.arr[0].bulk
 		args:=data.arr[1:]
-		// res:=s.ExecuteCmd(cmd,args)
-		conn.Write([]byte("+OK\r\rn"))
+		res:=s.ExecuteCmd(cmd,args)
+		conn.Write(res)
 	}
 }
