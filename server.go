@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/charmbracelet/log"
 )
@@ -13,8 +13,13 @@ type Server struct {
 	ln     net.Listener
 	quitCh chan struct{}
 
+	connsMu sync.RWMutex
+	conns   map[*net.Conn]struct{}
+
+	kvMu sync.RWMutex
+	kv *KVStore
 }
-type KVStore struct {
+type KVStore struct{
 	Strings map[string]string
 }
 
@@ -23,6 +28,12 @@ func NewServer(addr string) *Server {
 		addr:    addr,
 		ln:      nil,
 		quitCh:  make(chan struct{}),
+		connsMu: sync.RWMutex{},
+		conns:   make(map[*net.Conn]struct{}),
+		kvMu:sync.RWMutex{},
+		kv:&KVStore{
+			Strings: map[string]string{},
+		},
 	}
 }
 
@@ -72,9 +83,23 @@ func (s *Server) handleConn(conn net.Conn) {
 
 func (s *Server) readLoop(conn net.Conn) error {
 	for {
-		buf:=make([]byte, 1024)
-		n, _ := conn.Read(buf)
-		fmt.Println(string(buf[:n]))
-		conn.Write([]byte("+OK\r\n"))
+		rp := NewParser(conn)
+		data,err:=rp.Read()
+		if err != nil {
+			return err
+		}
+		if data.Name!="array"{
+			log.Error("Invalid data received", "data", data)
+			continue
+		}
+		if len(data.arr)==0{
+			log.Error("Empty array received")
+			continue
+		}
+
+		cmd:= data.arr[0].bulk
+		args:=data.arr[1:]
+		// res:=s.ExecuteCmd(cmd,args)
+		conn.Write([]byte("+OK\r\rn"))
 	}
 }
