@@ -8,13 +8,8 @@ import (
 )
 
 const (
-	STRING  = '+'
-	ERROR   = '-'
-	INTEGER = ':'
 	BULK    = '$'
 	ARRAY   = '*'
-	NULL    = '_'
-	BOOLEAN = '#'
 )
 
 type RespParser struct {
@@ -29,12 +24,8 @@ func NewParser(rd io.Reader) *RespParser {
 
 type DataType struct {
 	Name    string
-	str     string
+	bulk     string
 	arr     []DataType
-	err     string
-	num     int64
-	bulk    string
-	boolean bool
 }
 
 func (rp *RespParser) Read() (DataType, error) {
@@ -52,7 +43,6 @@ func (rp *RespParser) Read() (DataType, error) {
 		fmt.Println(string(b), b)
 		return DataType{}, fmt.Errorf("Invalid DataType")
 	}
-
 }
 
 func (rp *RespParser) ReadArray() (DataType, error) {

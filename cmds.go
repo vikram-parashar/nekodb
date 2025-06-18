@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -8,15 +10,40 @@ func (s *Server) ExecuteCmd(cmd string, args []DataType) []byte {
 	cmd = strings.ToUpper(cmd)
 
 	switch cmd {
+	//server commands
 	case "PING":
 		return s.PingCmd()
+	case "ECHO":
+		return s.EchoCmd(args)
+	//string cmds
 	case "SET":
 		return s.SetCmd(args)
 	case "GET":
 		return s.GetCmd(args)
+	case "DEL":
+		return s.DelCmd(args)
+	case "EXISTS":
+		return s.ExistsCmd(args)
+	//interger cmds
+	case "INCR":
+		return s.IncrCmd(args)
+	case "DECR":
+		return s.DecrCmd(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
+}
+
+func (s *Server) EchoCmd(args []DataType) []byte {
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'echo' command\r\n")
+	}
+
+	if args[0].Name != "bulk" {
+		return []byte("-ERR first argument must be a bulk string\r\n")
+	}
+
+	return ([]byte("+" + args[0].bulk + "\r\n"))
 }
 
 func (s *Server) PingCmd() []byte {
@@ -28,12 +55,12 @@ func (s *Server) SetCmd(args []DataType) []byte {
 		return []byte("-ERR wrong number of arguments for 'set' command\r\n")
 	}
 	key, val := args[0], args[1]
-	if key.Name != "bulk" {
-		return []byte("-ERR first argument must be a bulk string\r\n")
+	if key.Name != "bulk" || val.Name != "bulk" {
+		return []byte("-ERR first two arguments must be bulk strings\r\n")
 	}
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
-	
+
 	s.kv.Strings[key.bulk] = val.bulk
 	return []byte("+OK\r\n")
 }
@@ -55,4 +82,91 @@ func (s *Server) GetCmd(args []DataType) []byte {
 	} else {
 		return []byte("+" + val + "\r\n")
 	}
+}
+
+func (s *Server) DelCmd(args []DataType) []byte {
+	if len(args) == 0 {
+		return []byte("-ERR no key provided\r\n")
+	}
+	for _, key := range args {
+		if key.Name != "bulk" {
+			return []byte("-ERR all arguments must be bulk strings\r\n")
+		}
+	}
+
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	for _, key := range args {
+		delete(s.kv.Strings, key.bulk)
+	}
+	return []byte("+OK\r\n")
+}
+
+func (s *Server) ExistsCmd(args []DataType) []byte {
+	fmt.Println("HELLO")
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'exists' command\r\n")
+	}
+	key := args[0]
+	if key.Name != "bulk" {
+		return []byte("-ERR first argument must be a bulk string\r\n")
+	}
+
+	s.kvMu.RLock()
+	defer s.kvMu.RUnlock()
+
+	if _, ok := s.kv.Strings[key.bulk]; !ok {
+		return []byte("#f\r\n")
+	} else {
+		return []byte("#t\r\n")
+	}
+}
+
+func (s *Server) IncrCmd(args []DataType) []byte {
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'incr' command\r\n")
+	}
+	key := args[0]
+	if key.Name != "bulk" {
+		return []byte("-ERR first argument must be a bulk string\r\n")
+	}
+
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	val := s.kv.Strings[key.bulk]
+	num, err := strconv.Atoi(val)
+	if err != nil {
+		return []byte("-ERR value is not a number\r\n")
+	}
+	num+=1
+
+	s.kv.Strings[key.bulk]=strconv.Itoa(num)
+
+	return []byte(":" + strconv.Itoa(num) + "\r\n")
+}
+
+func (s *Server) DecrCmd(args []DataType) []byte {
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'incr' command\r\n")
+	}
+	key := args[0]
+	if key.Name != "bulk" {
+		return []byte("-ERR first argument must be a bulk string\r\n")
+	}
+
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	val := s.kv.Strings[key.bulk]
+	num, err := strconv.Atoi(val)
+	if err != nil {
+		return []byte("-ERR value is not a number\r\n")
+	}
+	num-=1
+
+	s.kv.Strings[key.bulk]=strconv.Itoa(num)
+
+	return []byte(":" + strconv.Itoa(num) + "\r\n")
 }
