@@ -24,6 +24,7 @@ type KVStore struct {
 	Strings map[string]string
 	Expirations map[string]time.Time
 	Lists map[string]*list.List
+	Sets map[string]map[string]struct{}
 }
 
 func NewServer(addr string) *Server {
@@ -37,6 +38,7 @@ func NewServer(addr string) *Server {
 			Strings: map[string]string{},
 			Expirations: map[string]time.Time{},
 			Lists: map[string]*list.List{},
+			Sets: map[string]map[string]struct{}{},
 		},
 	}
 }

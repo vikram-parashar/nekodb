@@ -45,6 +45,13 @@ func (s *Server) ExecuteCmd(cmd string, args []DataType) []byte {
 		return s.lpopCmd(args)
 	case "RPOP":
 		return s.rpopCmd(args)
+	//Set cmds
+	case "SADD":
+		return s.SaddCmd(args)
+	case "SREM":
+		return s.SremCmd(args)
+	case "SMEMBERS":
+		return s.SmembersCmd(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
@@ -246,7 +253,6 @@ func (s *Server) TtlCmd(args []DataType) []byte {
 	return []byte("+" + humanizeDuration(ttl) + "\r\n")
 }
 
-
 func (s *Server) clearExpiry(key string) {
 	val, ok := s.kv.Expirations[key]
 	if !ok {
@@ -271,8 +277,8 @@ func (s *Server) LpushCmd(args []DataType) []byte {
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	if _,ok:=s.kv.Lists[key];!ok{
-		s.kv.Lists[key]= list.New()
+	if _, ok := s.kv.Lists[key]; !ok {
+		s.kv.Lists[key] = list.New()
 	}
 	s.kv.Lists[key].PushFront(val)
 
@@ -290,8 +296,8 @@ func (s *Server) RpushCmd(args []DataType) []byte {
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	if _,ok:=s.kv.Lists[key];!ok{
-		s.kv.Lists[key]= list.New()
+	if _, ok := s.kv.Lists[key]; !ok {
+		s.kv.Lists[key] = list.New()
 	}
 	s.kv.Lists[key].PushBack(val)
 
@@ -309,11 +315,11 @@ func (s *Server) lpopCmd(args []DataType) []byte {
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	if _,ok:=s.kv.Lists[key];!ok{
+	if _, ok := s.kv.Lists[key]; !ok {
 		return []byte("-ERR key not found\r\n")
 	}
 
-	if s.kv.Lists[key].Len()==0{
+	if s.kv.Lists[key].Len() == 0 {
 		return []byte("-ERR list is empty\r\n")
 	}
 
@@ -332,14 +338,80 @@ func (s *Server) rpopCmd(args []DataType) []byte {
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	if _,ok:=s.kv.Lists[key];!ok{
+	if _, ok := s.kv.Lists[key]; !ok {
 		return []byte("-ERR key not found\r\n")
 	}
 
-	if s.kv.Lists[key].Len()==0{
+	if s.kv.Lists[key].Len() == 0 {
 		return []byte("-ERR list is empty\r\n")
 	}
 
 	val := s.kv.Lists[key].Remove(s.kv.Lists[key].Back()).(string)
 	return ([]byte("+" + val + "\r\n"))
+}
+
+func (s *Server) SaddCmd(args []DataType) []byte {
+	if len(args) != 2 {
+		return []byte("-ERR wrong number of arguments for 'sadd' command\r\n")
+	}
+	key, val := args[0].bulk, args[1].bulk
+	if key == "" || val == "" {
+		return []byte("-ERR first two arguments must be bulk strings\r\n")
+	}
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	if _, ok := s.kv.Sets[key]; !ok {
+		s.kv.Sets[key] = make(map[string]struct{})
+	}
+	s.kv.Sets[key][val] = struct{}{}
+
+	return []byte("+OK\r\n")
+}
+
+func (s *Server) SremCmd(args []DataType) []byte {
+	if len(args) != 2 {
+		return []byte("-ERR wrong number of arguments for 'srem' command\r\n")
+	}
+	key, val := args[0].bulk, args[1].bulk
+	if key == "" || val == "" {
+		return []byte("-ERR first two arguments must be bulk strings\r\n")
+	}
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	if _, ok := s.kv.Sets[key]; !ok {
+		return []byte("-ERR key not found\r\n")
+	}
+	delete(s.kv.Sets[key], val)
+
+	return []byte("+OK\r\n")
+}
+
+func (s *Server) SmembersCmd(args []DataType) []byte {
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'smembers' command\r\n")
+	}
+	key := args[0].bulk
+	if key == "" {
+		return []byte("-ERR first argument must be bulk string\r\n")
+	}
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	if _, ok := s.kv.Sets[key]; !ok {
+		return []byte("-ERR key not found\r\n")
+	}
+	var members []string
+	for member := range s.kv.Sets[key] {
+		members = append(members, member)
+	}
+	if len(members) == 0 {
+		return []byte("-ERR set is empty\r\n")
+	}
+	response := fmt.Sprintf("*%d\r\n", len(members))
+	for _, member := range members {
+		response += fmt.Sprintf("$%d\r\n%s\r\n", len(member), member)
+	}
+	return []byte(response)
 }
