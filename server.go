@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/log"
 )
@@ -20,6 +21,7 @@ type Server struct {
 }
 type KVStore struct {
 	Strings map[string]string
+	Expirations map[string]time.Time
 }
 
 func NewServer(addr string) *Server {
@@ -31,6 +33,7 @@ func NewServer(addr string) *Server {
 		kvMu:    sync.RWMutex{},
 		kv: &KVStore{
 			Strings: map[string]string{},
+			Expirations: map[string]time.Time{},
 		},
 	}
 }
@@ -44,6 +47,9 @@ func (s *Server) Start() {
 	}
 
 	log.Info("Server started", "at addr", s.addr)
+
+	go s.clearExpiryRoutine()
+
 	s.acceptLoop()
 }
 

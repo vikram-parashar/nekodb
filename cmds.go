@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *Server) ExecuteCmd(cmd string, args []DataType) []byte {
@@ -29,6 +30,11 @@ func (s *Server) ExecuteCmd(cmd string, args []DataType) []byte {
 		return s.IncrCmd(args)
 	case "DECR":
 		return s.DecrCmd(args)
+	//expiry cmds
+	case "EX":
+		return s.ExCmd(args)
+	case "TTL":
+		return s.TtlCmd(args)
 	default:
 		return []byte("-ERR unknown command\r\n")
 	}
@@ -69,15 +75,17 @@ func (s *Server) GetCmd(args []DataType) []byte {
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'get' command\r\n")
 	}
-	key := args[0]
-	if key.Name != "bulk" {
+	key := args[0].bulk
+	if key == "" {
 		return []byte("-ERR first argument must be a bulk string\r\n")
 	}
 
 	s.kvMu.RLock()
 	defer s.kvMu.RUnlock()
 
-	if val, ok := s.kv.Strings[key.bulk]; !ok {
+	s.clearExpiry(key)
+
+	if val, ok := s.kv.Strings[key]; !ok {
 		return []byte("-ERR key not found\r\n")
 	} else {
 		return []byte("+" + val + "\r\n")
@@ -108,15 +116,17 @@ func (s *Server) ExistsCmd(args []DataType) []byte {
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'exists' command\r\n")
 	}
-	key := args[0]
-	if key.Name != "bulk" {
+	key := args[0].bulk
+	if key == "" {
 		return []byte("-ERR first argument must be a bulk string\r\n")
 	}
 
 	s.kvMu.RLock()
 	defer s.kvMu.RUnlock()
 
-	if _, ok := s.kv.Strings[key.bulk]; !ok {
+	s.clearExpiry(key)
+
+	if _, ok := s.kv.Strings[key]; !ok {
 		return []byte("#f\r\n")
 	} else {
 		return []byte("#t\r\n")
@@ -127,22 +137,24 @@ func (s *Server) IncrCmd(args []DataType) []byte {
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'incr' command\r\n")
 	}
-	key := args[0]
-	if key.Name != "bulk" {
+	key := args[0].bulk
+	if key == "" {
 		return []byte("-ERR first argument must be a bulk string\r\n")
 	}
 
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	val := s.kv.Strings[key.bulk]
+	s.clearExpiry(key)
+
+	val := s.kv.Strings[key]
 	num, err := strconv.Atoi(val)
 	if err != nil {
 		return []byte("-ERR value is not a number\r\n")
 	}
-	num+=1
+	num += 1
 
-	s.kv.Strings[key.bulk]=strconv.Itoa(num)
+	s.kv.Strings[key] = strconv.Itoa(num)
 
 	return []byte(":" + strconv.Itoa(num) + "\r\n")
 }
@@ -151,22 +163,89 @@ func (s *Server) DecrCmd(args []DataType) []byte {
 	if len(args) != 1 {
 		return []byte("-ERR wrong number of arguments for 'incr' command\r\n")
 	}
-	key := args[0]
-	if key.Name != "bulk" {
+	key := args[0].bulk
+	if key == "" {
 		return []byte("-ERR first argument must be a bulk string\r\n")
 	}
 
 	s.kvMu.Lock()
 	defer s.kvMu.Unlock()
 
-	val := s.kv.Strings[key.bulk]
+	s.clearExpiry(key)
+
+	val := s.kv.Strings[key]
 	num, err := strconv.Atoi(val)
 	if err != nil {
 		return []byte("-ERR value is not a number\r\n")
 	}
-	num-=1
+	num -= 1
 
-	s.kv.Strings[key.bulk]=strconv.Itoa(num)
+	s.kv.Strings[key] = strconv.Itoa(num)
 
 	return []byte(":" + strconv.Itoa(num) + "\r\n")
+}
+
+func (s *Server) ExCmd(args []DataType) []byte {
+	if len(args) != 2 {
+		return []byte("-ERR wrong number of arguments for 'ex' command\r\n")
+	}
+	key, secondStr := args[0].bulk, args[1].bulk
+	if key == "" || secondStr == "" {
+		return []byte("-ERR first two arguments must be bulk strings\r\n")
+	}
+
+	seconds, err := strconv.Atoi(secondStr)
+	if err != nil {
+		return []byte("-ERR second argument must be an integer\r\n")
+	}
+
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	s.clearExpiry(key)
+
+	if _, ok := s.kv.Strings[key]; !ok {
+		return []byte("-ERR key not found\r\n")
+	}
+
+	s.kv.Expirations[key] = time.Now().Add(time.Duration(seconds) * time.Second)
+	return []byte("+OK\r\n")
+}
+
+func (s *Server) TtlCmd(args []DataType) []byte {
+	if len(args) != 1 {
+		return []byte("-ERR wrong number of arguments for 'TTL' command\r\n")
+	}
+	key := args[0].bulk
+	if key == "" {
+		return []byte("-ERR first argument must be bulk strings\r\n")
+	}
+
+	s.kvMu.Lock()
+	defer s.kvMu.Unlock()
+
+	if _, ok := s.kv.Expirations[key]; !ok {
+		return []byte("-ERR key not found\r\n")
+	}
+
+	ttl := s.kv.Expirations[key].Sub(time.Now())
+	if ttl < 0 {
+		delete(s.kv.Strings, key)
+		delete(s.kv.Expirations, key)
+	}
+	return []byte("+" + humanizeDuration(ttl) + "\r\n")
+}
+
+
+func (s *Server) clearExpiry(key string) {
+	val, ok := s.kv.Expirations[key]
+	if !ok {
+		return
+	}
+
+	ttl := val.Sub(time.Now())
+	if ttl < 0 {
+		delete(s.kv.Strings, key)
+		delete(s.kv.Expirations, key)
+	}
 }
