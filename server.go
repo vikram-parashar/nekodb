@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"net"
 	"os"
 	"sync"
@@ -22,6 +23,7 @@ type Server struct {
 type KVStore struct {
 	Strings map[string]string
 	Expirations map[string]time.Time
+	Lists map[string]*list.List
 }
 
 func NewServer(addr string) *Server {
@@ -34,6 +36,7 @@ func NewServer(addr string) *Server {
 		kv: &KVStore{
 			Strings: map[string]string{},
 			Expirations: map[string]time.Time{},
+			Lists: map[string]*list.List{},
 		},
 	}
 }
