@@ -73,14 +73,17 @@ redis-cli -p 8080
 ```
 # 🧩 Project Structure
 ```bash
-.
-├── main.go           # Server entry point
-├── server.go         # TCP server logic
-├── cmds.go           # RESP command implementations
-├── parser.go         # RESP protocol parser
-├── helperFunc.go     # Utilities (TTL formatting, cleanup)
-├── go.mod/go.sum     # Module dependencies
-├── Makefile          # Build/run targets
+./
+├── cmd/
+│   └── server/
+│       └── main.go         # Entry point
+├── internal/
+│   ├── parser/
+│   ├── server/             # Server logic  and All Commands
+│   └── utils/
+├── go.mod
+├── go.sum
+├── Makefile                # (optional)
 ```
 
 Made with ❤️ in Go
