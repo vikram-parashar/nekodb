@@ -1,89 +1,113 @@
 # NekoDB
 
-A lightweight in-memory key-value store server implemented in Go that communicates using the Redis Serialization Protocol (RESP). It supports strings, lists, and sets along with expiration, concurrency safety, and basic command execution.
+[![Go Version](https://img.shields.io/badge/go-1.18+-brightgreen)](https://golang.org/doc/go1.18)
+[![License](https://img.shields.io/github/license/vikram-parashar/nekodb)](./LICENSE)
+[![Build Status](https://github.com/vikram-parashar/nekodb/actions/workflows/go.yml/badge.svg)](https://github.com/vikram-parashar/nekodb/actions)
 
-## ✨ Features
+A lightweight, in-memory key-value database, compatible with most Redis clients. NekoDB is designed for simplicity, fast prototyping, and local development where spinning up a full Redis instance is overkill.
 
-- RESP protocol support
-- String operations: `SET`, `GET`, `DEL`, `EXISTS`, `INCR`, `DECR`
-- Expiry commands: `EX`, `TTL`
-- List commands: `LPUSH`, `RPUSH`, `LPOP`, `RPOP`
-- Set commands: `SADD`, `SREM`, `SMEMBERS`
-- Basic commands: `PING`, `ECHO`
-- Concurrent-safe in-memory storage using `sync.RWMutex`
-- Periodic cleanup of expired keys
+---
 
-## 🛠️ Getting Started
+## Features
 
-### Prerequisites
+- 🐾 **Redis Protocol Compatible:** Use your favorite Redis client libraries out of the box.
+- 💾 **In-memory Storage:** Fast, ephemeral, and ideal for testing or non-persistent scenarios.
+- 🔒 **Concurrent Access:** Handles multiple simultaneous client connections.
+- ⏰ **Key Expiry:** Supports expiring keys automatically.
+- 🧹 **Automatic Cleanup:** Periodically removes expired keys to free memory.
+- 🗃️ **Data Types:** Supports strings, lists, sets, and more (see below).
+- ⚡ **Zero Dependencies:** Single binary, no external services required.
 
-- Go 1.18+
-- `make` (optional, for Makefile support)
-#### 📦 Dependencies
-* charmbracelet/log – Elegant structured logger for CLI apps
+---
 
-Install dependencies:
-```bash
-go mod tidy
-```
+## Getting Started
+
 ### Installation
 
-Clone the repository:
+```sh
+go install github.com/vikram-parashar/nekodb@latest
+```
 
-```bash
-git clone https://github.com/vikram-parashar/nekodb/
+Or clone and build from source:
+
+```sh
+git clone https://github.com/vikram-parashar/nekodb.git
 cd nekodb
+go build -o nekodb .
 ```
 
-#### Build & Run:
-(Using the Makefile)
-```bash
-make run
-```
-(or manually)
-```bash
-go build -o kv-server
-./kv-server
-```
-Sever will start at localhost:8080
+### Usage
 
-# 🔌 Using redis-cli
-You can test the server using the official Redis command-line client (redis-cli), which understands RESP.
+Start the server (default port is 6379):
 
-## Run redis-cli against your server:
-```bash
-redis-cli -p 8080
-```
-### Example Commands:
-```bash
-127.0.0.1:8080> PING
-"PONG"
-
-127.0.0.1:8080> SET name vikram
-"OK"
-
-127.0.0.1:8080> GET name
-"vikram"
-
-127.0.0.1:8080> EX name 5
-"OK"
-
-127.0.0.1:8080> TTL name
-"4s"
-```
-# 🧩 Project Structure
-```bash
-./
-├── cmd/
-│   └── server/
-│       └── main.go         # Entry point
-├── internal/
-│   ├── parser/
-│   ├── server/             # Server logic  and All Commands
-│   └── utils/
-├── go.mod
-├── go.sum
-├── Makefile                # (optional)
+```sh
+./nekodb
 ```
 
-Made with ❤️ in Go
+Or specify a port:
+
+```sh
+./nekodb -port 6380
+```
+
+Connect with your favorite Redis client:
+
+```python
+# Python example using redis-py
+import redis
+r = redis.Redis(host='localhost', port=6379)
+r.set('foo', 'bar')
+print(r.get('foo'))  # b'bar'
+```
+
+---
+
+## Supported Commands & Data Types
+
+| Command    | Description                                     |
+|------------|-------------------------------------------------|
+| SET/GET    | Set and get string values                       |
+| DEL        | Delete a key                                    |
+| EXPIRE     | Set key expiration                              |
+| LPUSH/RPUSH| List operations                                 |
+| SADD/SMEMBERS | Set operations                               |
+| KEYS       | List all keys (with pattern)                    |
+
+> **Note:** Some advanced Redis commands are not supported. See [docs/COMMANDS.md](docs/COMMANDS.md) for a full list.
+
+---
+
+## Configuration
+
+- `-port` — Specify the listening port (default: 6379)
+- `-cleanup-interval` — Set key expiration cleanup interval (default: 60s)
+
+---
+
+## Contributing
+
+Contributions are welcome! Please submit issues or pull requests via GitHub.
+
+1. Fork the repo
+2. Create a feature branch
+3. Push your changes
+4. Open a pull request
+
+---
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
+
+---
+
+## Acknowledgements
+
+- Inspired by [Redis](https://redis.io/)
+- Built with [Go](https://golang.org/)
+
+---
+
+## Contact & Support
+
+- For issues, feature requests, or questions, please use [GitHub Issues](https://github.com/vikram-parashar/nekodb/issues).
